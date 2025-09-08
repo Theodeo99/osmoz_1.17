@@ -48,3 +48,7 @@ jobs:
           files: dist/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+                - name: Build EXE with PyInstaller (single-line)
+        run: pyinstaller --clean --log-level=DEBUG --onefile --noconsole --add-data "Untitled17.ipynb;." --collect-all voila --collect-all nbformat --collect-all jinja2 --hidden-import markupsafe --hidden-import nbclient --hidden-import traitlets --hidden-import jupyter_client --hidden-import tornado --hidden-import pygments main.py
+
