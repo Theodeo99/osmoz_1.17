@@ -1,145 +1,79 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+Main wrapper pour lancer le notebook Untitled17.ipynb avec Voilà / navigateur.
+Adapté pour être packagé par PyInstaller.
+"""
 
 import os
 import sys
 import time
-import socket
-import subprocess
 import webbrowser
-import signal
+import threading
 
-# pywebview est optionnel (on bascule vers le navigateur si indisponible)
-try:
-    import webview
-except Exception:
-    webview = None
+# Nom exact du notebook dans le repo (modifié comme demandé)
+NB_NAME = "Untitled17.ipynb"
 
-# --------- Paramètres à adapter ----------
-NB_NAME = "Untitled17.ipynb"   # nom du notebook à lancer
-PORT = 8866                    # port local pour Voilà
-WINDOW_TITLE = "Osmoz"
-WINDOW_WIDTH = 1200
-WINDOW_HEIGHT = 800
-# ----------------------------------------
+# Port et URL d'ouverture
+PORT = 8866
+HOST = "127.0.0.1"
+URL = f"http://{HOST}:{PORT}/"
 
-def resource_path(*paths):
-    """
-    Renvoie un chemin vers une ressource empaquetée.
-    - En mode PyInstaller (onefile), les fichiers add-data sont dans sys._MEIPASS.
-    - En mode normal, on prend le dossier du script.
-    """
-    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base, *paths)
+def run_voila():
+    """Lance voila pour servir le notebook localement."""
+    try:
+        # Import local pour éviter d'échouer si non installé au runtime
+        import voila.app  # noqa: F401
+    except Exception:
+        # Si voila n'est pas disponible, on tente un fallback : ouvrir le fichier dans le navigateur
+        print("voila non disponible dans l'environnement d'exécution. On ouvre le notebook dans le navigateur si possible.")
+        path = os.path.abspath(NB_NAME)
+        if os.path.exists(path):
+            webbrowser.open("file://" + path)
+        else:
+            print(f"Fichier {NB_NAME} introuvable.")
+        return
 
-def is_port_open(host: str, port: int) -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.settimeout(0.25)
-        return s.connect_ex((host, port)) == 0
-
-def build_url():
-    nb_abs = resource_path(Untitled17.ipynb)
-    nb_base = os.path.basename(nb_abs)
-    return f"http://127.0.0.1:{PORT}/voila/render/{nb_base}"
-
-def start_voila(notebook_path: str):
-    """
-    Lance Voilà en sous-processus.
-    On force l'écoute sur 127.0.0.1, sans ouverture de navigateur.
-    """
+    # Construire la commande voila via subprocess (plus fiable pour PyInstaller)
+    import subprocess
     cmd = [
-        sys.executable, "-m", "voila", notebook_path,
+        sys.executable, "-m", "voila",
+        NB_NAME,
         "--no-browser",
         f"--port={PORT}",
-        "--Voila.ip=127.0.0.1",
+        f"--ip={HOST}",
+        "--strip_sources=False"
     ]
-    # Sous Windows, éviter les fenêtres console parasites (quand packagé)
-    creationflags = 0
-    if os.name == "nt":
-        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    return subprocess.Popen(cmd, creationflags=creationflags)
+    try:
+        subprocess.check_call(cmd)
+    except subprocess.CalledProcessError as e:
+        print("Erreur lors du lancement de voila :", e)
+    except FileNotFoundError:
+        print("Commande voila introuvable. Vérifiez l'installation.")
 
-def wait_for_server(timeout=45):
-    """
-    Attend que le port de Voilà réponde. Retourne True si OK, False sinon.
-    """
-    t0 = time.time()
-    while time.time() - t0 < timeout:
-        if is_port_open("127.0.0.1", PORT):
-            return True
-        time.sleep(0.2)
-    return False
-
-def open_in_webview(url: str, on_closed):
-    """
-    Ouvre l'URL dans une fenêtre native via pywebview.
-    Si pywebview est indisponible, fallback navigateur par défaut.
-    """
-    if webview is None:
-        webbrowser.open(url)
-        return "browser"
-
-    win = webview.create_window(
-        WINDOW_TITLE, url=url, width=WINDOW_WIDTH, height=WINDOW_HEIGHT, resizable=True
-    )
-    # on_closed est appelé quand l'utilisateur ferme la fenêtre
-    webview.start(on_closed, debug=False)
-    return "webview"
+def open_browser_later(delay=1.5):
+    """Ouvrir le navigateur après un court délai pour laisser voila démarrer."""
+    def _open():
+        time.sleep(delay)
+        try:
+            webbrowser.open(URL)
+        except Exception:
+            pass
+    t = threading.Thread(target=_open, daemon=True)
+    t.start()
 
 def main():
-    # Gestion Ctrl+C propre
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
-
-    nb_path = resource_path(untitled17)
-    if not os.path.exists(nb_path):
-        print(f"[ERREUR] Notebook introuvable: {nb_path}")
-        print("Vérifiez NB_NAME ou l'option --add-data de PyInstaller.")
+    # Vérifications simples
+    if not os.path.exists(NB_NAME):
+        print(f"Erreur: le notebook '{NB_NAME}' est introuvable dans le répertoire courant: {os.getcwd()}")
+        print("Liste des fichiers présents :")
+        for f in sorted(os.listdir(".")):
+            print("  -", f)
         sys.exit(1)
 
-    url = build_url()
-    proc = None
-    try:
-        proc = start_voila(nb_path)
-        if not wait_for_server():
-            raise RuntimeError("Voilà ne démarre pas (port bloqué ou dépendances manquantes).")
-
-        def on_closed():
-            # Ferme Voilà quand la fenêtre se ferme
-            try:
-                if proc and proc.poll() is None:
-                    proc.terminate()
-                    # Sur certaines plateformes, un kill peut être nécessaire
-                    try:
-                        proc.wait(timeout=3)
-                    except subprocess.TimeoutExpired:
-                        proc.kill()
-            except Exception:
-                pass
-
-        mode = open_in_webview(url, on_closed)
-        # Si on a ouvert dans le navigateur, garder Voilà en vie jusqu'à Ctrl+C
-        if mode == "browser":
-            print(f"Application lancée sur: {url}")
-            print("Appuyez sur Ctrl+C pour quitter.")
-            try:
-                while True:
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                pass
-
-    except Exception as e:
-        print(f"[ERREUR] {e}")
-        sys.exit(2)
-    finally:
-        if proc and proc.poll() is None:
-            try:
-                proc.terminate()
-                proc.wait(timeout=2)
-            except Exception:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
+    print("Démarrage de Voilà pour :", NB_NAME)
+    open_browser_later(2.0)
+    run_voila()
 
 if __name__ == "__main__":
     main()
