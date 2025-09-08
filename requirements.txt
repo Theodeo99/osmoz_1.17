@@ -7,3 +7,10 @@ openpyxl
 chardet
 reportlab
 pillow
+nbformat
+nbclient
+jupyter-client
+tornado
+jinja2
+markupsafe
+pygments
