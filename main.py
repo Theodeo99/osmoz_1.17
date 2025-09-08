@@ -16,7 +16,7 @@ except Exception:
     webview = None
 
 # --------- Paramètres à adapter ----------
-NB_NAME = "Osmoz_1_16.ipynb"   # nom du notebook à lancer
+NB_NAME = "Untitled17.ipynb"   # nom du notebook à lancer
 PORT = 8866                    # port local pour Voilà
 WINDOW_TITLE = "Osmoz"
 WINDOW_WIDTH = 1200
@@ -38,7 +38,7 @@ def is_port_open(host: str, port: int) -> bool:
         return s.connect_ex((host, port)) == 0
 
 def build_url():
-    nb_abs = resource_path(NB_NAME)
+    nb_abs = resource_path(Untitled17.ipynb)
     nb_base = os.path.basename(nb_abs)
     return f"http://127.0.0.1:{PORT}/voila/render/{nb_base}"
 
