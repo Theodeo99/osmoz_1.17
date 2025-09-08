@@ -1,0 +1,9 @@
+voila
+pywebview
+pyinstaller
+pandas
+ipywidgets
+openpyxl
+chardet
+reportlab
+pillow
