@@ -33,3 +33,14 @@ pillow
 openpyxl
 chardet
 ipywidgets
+pandas
+numpy
+jupyterlab
+ipywidgets
+openpyxl
+reportlab
+Pillow
+chardet
+xlrd
+matplotlib
+seaborn
