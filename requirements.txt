@@ -14,3 +14,8 @@ tornado
 jinja2
 markupsafe
 pygments
+streamlit
+pandas
+numpy
+matplotlib
+scikit-learn
