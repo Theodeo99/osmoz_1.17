@@ -12,7 +12,7 @@ import webbrowser
 import threading
 
 # Nom exact du notebook dans le repo (modifié comme demandé)
-NB_NAME = "Untitled17.ipynb"
+NB_NAME = "Osmoz_1.22.ipynb"
 
 # Port et URL d'ouverture
 PORT = 8866
