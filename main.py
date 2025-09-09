@@ -1,71 +1,83 @@
+# main.py
 import streamlit as st
+import subprocess
+import sys
+import shutil
 from pathlib import Path
-from nbformat import read, write, NotebookNode
-from nbclient import NotebookClient, CellExecutionError
-from nbconvert import HTMLExporter
 import tempfile
-import traceback
+import time
+import json
+import os
 
-st.set_page_config(page_title="Osmoz Notebook Runner", layout="wide")
-st.title("Exécuter Osmoz_1.22.ipynb")
+NB_NAME = "Osmoz_1.22.ipynb"
+OUT_HTML = "osmoz_executed.html"
+NBCONVERT_TIMEOUT = 600  # secondes
 
-NB_PATH = Path("Osmoz_1.22.ipynb")
+st.set_page_config(page_title="Osmoz — Exécuter Notebook", layout="wide")
+st.title("Osmoz — Exécuter Notebook (dynamique)")
 
-if not NB_PATH.exists():
-    st.error(f"Notebook introuvable : {NB_PATH}. Placez Osmoz_1.22.ipynb à la racine du repo.")
-    st.stop()
+col1, col2 = st.columns([2, 1])
 
-st.info("Lancement de l'exécution du notebook (nbclient). Cela peut prendre plusieurs secondes/minutes.")
+with col1:
+    st.markdown(f"- Notebook: **{NB_NAME}**")
+    nb_path = Path(NB_NAME)
+    if not nb_path.exists():
+        st.error(f"Notebook introuvable : placez {NB_NAME} dans le même dossier que main.py.")
+        st.stop()
+    else:
+        st.success(f"Notebook trouvé : {NB_NAME}")
 
-# Lecture du notebook
-with NB_PATH.open("r", encoding="utf-8") as f:
-    nb = read(f, as_version=4)
+    st.info("L'exécution va lancer le notebook côté serveur (code exécuté). Ne déployez pas cela sans précautions.")
 
-# Si le kernel metadata n'existe pas, on force "python3"
-kern_name = nb.metadata.get("kernelspec", {}).get("name", "python3")
-st.write(f"Kernel demandé dans la metadata : {kern_name}")
+with col2:
+    run_now = st.button("▶️ Exécuter le notebook maintenant")
+    force_reexec = st.checkbox("Forcer la ré-exécution (supprime cache HTML)", value=False)
+    use_nbclient = st.checkbox("Utiliser nbclient (exécution interne Python)", value=False)
 
-# Exécuter en essayant d'abord le kernelspec demandé, puis fallback sur "python3"
-attempts = [kern_name] if kern_name else []
-if "python3" not in attempts:
-    attempts.append("python3")
+log_area = st.empty()
+progress = st.empty()
 
-executed = False
-errors = []
-for kn in attempts:
+def write_log(s: str, append=True):
+    if append:
+        prev = log_area.text_area("Logs", value="", height=300)
+    # simple append strategy: print to console + update textarea (keeps last only)
+    print(s)
+    log_area.text_area("Logs", value=s, height=300)
+
+def run_subprocess_nbconvert(nb: Path, out_html: str, timeout_sec: int = NBCONVERT_TIMEOUT):
+    cmd = [
+        sys.executable, "-m", "nbconvert",
+        "--to", "html",
+        "--execute",
+        f"--ExecutePreprocessor.timeout={timeout_sec}",
+        f"--output={out_html}",
+        str(nb)
+    ]
+    # Use a temporary working dir so output name is predictable
     try:
-        st.write(f"Tentative d'exécution avec kernel_name='{kn}' ...")
-        client = NotebookClient(nb, timeout=600, kernel_name=kn, allow_errors=False)
-        client.execute()
-        executed = True
-        st.success(f"Exécution terminée avec kernel '{kn}'.")
-        break
-    except CellExecutionError as e:
-        tb = traceback.format_exc()
-        errors.append((kn, str(e), tb))
-        st.warning(f"Erreur d'exécution avec kernel '{kn}': {e}")
-    except Exception as e:
-        tb = traceback.format_exc()
-        errors.append((kn, str(e), tb))
-        st.warning(f"Échec avec kernel '{kn}': {e}")
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout_sec + 10
+        )
+    except subprocess.TimeoutExpired as e:
+        return False, f"TimeoutExpired: {e}"
+    out = proc.stdout or ""
+    err = proc.stderr or ""
+    rc = proc.returncode
+    return rc == 0, out + "\n" + err
 
-if not executed:
-    st.error("Impossible d'exécuter le notebook avec les kernels testés. Voir les détails ci‑dessous.")
-    for kn, msg, tb in errors:
-        st.subheader(f"Détails kernel: {kn}")
-        st.text(msg)
-        st.code(tb)
-    st.stop()
-
-# Exporter en HTML et afficher (via composant HTML)
-exporter = HTMLExporter()
-body, resources = exporter.from_notebook_node(nb)
-
-# Sauvegarde locale du HTML dans le workspace (utile pour debug)
-out_html = Path("osmoz_executed.html")
-out_html.write_text(body, encoding="utf-8")
-st.success(f"HTML généré et sauvegardé en {out_html}")
-
-# Affichage dans Streamlit
-st.subheader("Aperçu du notebook exécuté")
-st.components.v1.html(body, height=800, scrolling=True)
+def try_install_ipykernel_as_python3():
+    # Attempt to install ipykernel and register kernel named "python3"
+    cmds = [
+        [sys.executable, "-m", "pip", "install", "--upgrade", "ipykernel"],
+        [sys.executable, "-m", "ipykernel", "install", "--user", "--name", "python3", "--display-name", "python3"]
+    ]
+    logs = []
+    for c in cmds:
+        try:
+            p = subprocess.run(c, capture_output=True, text=True, timeout=300)
+            logs.append(f"$ {' '.join(c)}\n--- rc={p.returncode}\n{p.stdout}\n{p.stderr}\n")
+            if p.returncode != 0:
+                return False, "\n".join..(stopped)
