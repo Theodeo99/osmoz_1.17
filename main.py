@@ -1,3 +1,9 @@
+import streamlit as st
+
+st.write("START — Streamlit démarre")
+# Arrêtez ici pour tester initialement.
+# Ensuite, vous pourrez décommenter le reste du fichier progressivement.
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
