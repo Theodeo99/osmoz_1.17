@@ -21,3 +21,15 @@ matplotlib
 scikit-learn
 nbformat
 nbconvert
+streamlit
+nbconvert
+notebook
+nbclient
+jupyter-client
+ipykernel
+pandas
+reportlab
+pillow
+openpyxl
+chardet
+ipywidgets
